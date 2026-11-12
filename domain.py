@@ -113,6 +113,14 @@ REGELZEIT_IN_MONATEN = {
     Studienart.TEILZEIT_2: 72,
 }
 
+def addiereMonate(datum: date, monate: int) -> date:
+    """Addiert Monate zu einem Datum. Gibt es den Tag im Zielmonat nicht wird der letzte Tag des Monats genommen"""
+    gesamt = datum.month - 1 + monate
+    jahr = datum.year + gesamt // 12
+    monat = gesamt % 12 + 1
+    letzter_tag = calendar.monthrange(jahr, monat)[1]
+    return date(jahr, monat, min(datum.day, letzter_tag))
+    
 @dataclass(eq=False)
 class Studiengang:
     """Der Studiengang mit Startdatum, Studienart, Gesamt-ECTS und Notenzielen. Er enthält die Semester und Wahlpflichtgruppen"""
@@ -129,15 +137,11 @@ class Studiengang:
     def regelzeitInMonaten(self) -> int:
         """Regelstudienzeit in Monaten, abhängig von der Studienart."""
         return REGELZEIT_IN_MONATEN[self.art]
-    
+            
     @property
     def enddatum(self) -> date:
         """Berechnetes Enddatum: Startdatum plus Regelzeit in Monaten"""
-        monate = self.startdatum.month -1 + self.regelzeitInMonaten
-        jahr = self.startdatum.year + monate // 12
-        monat = monate % 12 + 1
-        letzter_tag = calendar.monthrange(jahr, monat)[1]
-        return date(jahr, monat, min(self.startdatum.day, letzter_tag))
+        return addiereMonate(self.startdatum, self.regelzeitInMonaten)
         
     def alleModule(self) -> list[Modul]:
         """Gibt eine Liste mit den Modulen aller Semester zurück"""
