@@ -144,10 +144,20 @@ class Studiengang:
         return addiereMonate(self.startdatum, self.regelzeitInMonaten)
         
     def alleModule(self) -> list[Modul]:
-        """Gibt eine Liste mit den Modulen aller Semester zurück"""
+        """Gibt alle Module des Studiengangs in einer Liste zurück.
+
+        Zuerst kommen die Module der Semester, danach die Module der
+        Wahlpflichtgruppen. Ein Modul steht entweder in einem Semester
+        oder in einer Gruppe, nie in beiden.
+
+        Returns:
+            Liste aller Module des Studiengangs.
+        """
         module = []
         for semester in self.semester:
             module.extend(semester.module)
+        for gruppe in self.wahlpflichtgruppen:
+            module.extend(gruppe.module)
         return module
         
     def fuegeModulHinzu(self, semesternummer: int, modul: Modul) -> None:
