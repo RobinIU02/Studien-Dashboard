@@ -1,0 +1,160 @@
+"""Fachklassen und Enumerationen des Studien-Dashboards"""
+from __future__ import annotations
+
+from decimal import Decimal
+from enum import Enum
+
+from dataclasses import dataclass, field
+
+import calendar
+from datetime import date
+
+
+class Studienart(Enum):
+    VOLLZEIT = "vollzeit"
+    TEILZEIT_1 = "teilzeit_1"
+    TEILZEIT_2 = "teilzeit_2"
+
+class Modulstatus(Enum):
+    NICHT_EINGEBUCHT = "nicht_eingebucht"
+    EINGEBUCHT = "eingebucht"
+    ABGESCHLOSSEN = "abgeschlossen"
+    GESPERRT = "gesperrt"
+
+class Ergebnis(Enum):
+    BESTANDEN = "bestanden"
+    NICHT_BESTANDEN = "nicht_bestanden"
+    OFFEN = "offen"
+    ANERKANNT = "anerkannt"
+    ZUR_PRUEFUNG_ANGEMELDET = "zur_pruefung_angemeldet"
+
+@dataclass
+class Pruefungsleistung:
+    """Klasse für Pruefungsleistung. Die Note und das Ergebnis müssen zusammenpassen"""
+    versuchsnummer: int
+    ergebnis: Ergebnis
+    note: Decimal | None = None
+
+    def __post_init__(self):
+        if self.versuchsnummer < 1:
+            raise ValueError("Die Versuchsnummer muss mindestens 1 sein.")
+        hat_note = self.ergebnis in (Ergebnis.BESTANDEN, Ergebnis.NICHT_BESTANDEN)
+    
+        if not hat_note:
+            if self.note is not None:
+                raise ValueError("Bei diesem Ergebnis darf es keine Note geben")
+            return
+        
+        if not isinstance(self.note, Decimal):
+            raise TypeError("Die Note muss als Decimal angegeben werden.")
+        
+        if self.ergebnis == Ergebnis.BESTANDEN:
+            if not Decimal("1.0") <=self.note <= Decimal("4.0"):
+                raise ValueError("Bestanden gilt nur für die Noten von 1,0 bis 4,0")
+        else:
+            if not Decimal("4.1") <= self.note <= Decimal("5.0"):
+                raise ValueError("Nicht bestanden gilt nur für die Noten von 4,1 bis 5,0.")
+
+
+@dataclass(eq=False)
+class Modul:
+    """Ein Modul des Studienplans. Der Status wird aus Voraussetzungen und Prüfungsleistungen berechnet"""
+    name: str
+    ects: int
+    eingebucht: bool = False
+    voraussetzung: list[Modul] = field(default_factory=list)
+    pruefungsleistungen: list[Pruefungsleistung] = field(default_factory=list)
+    
+    @property
+    def status(self) -> Modulstatus:
+        """Berechneter Status des Moduls, abhängig von Prüfungsleistungen, Voraussetzungen und Buchung"""
+        for leistung in self.pruefungsleistungen:
+            if leistung.ergebnis in (Ergebnis.BESTANDEN, Ergebnis.ANERKANNT):
+                return Modulstatus.ABGESCHLOSSEN
+        for voraussetzung in self.voraussetzung:
+            if voraussetzung.status != Modulstatus.ABGESCHLOSSEN:
+                return Modulstatus.GESPERRT
+        if self.eingebucht:
+            return Modulstatus.EINGEBUCHT
+        
+        return Modulstatus.NICHT_EINGEBUCHT
+               
+    def buche(self) -> None:
+        """Bucht das Modul ein. Fehlt eine Voraussetzung, wird ein Fehler ausgelöst""" 
+        if self.status == Modulstatus.ABGESCHLOSSEN:
+            raise ValueError(f"Das Modul {self.name} ist bereits abgeschlossen")
+            
+        fehlende = []
+        for voraussetzung in self.voraussetzung:
+            if voraussetzung.status != Modulstatus.ABGESCHLOSSEN:
+                fehlende.append(voraussetzung.name)
+                
+        if fehlende:
+            raise ValueError("Voraussetzung fehlt: " + ", ".join(fehlende))
+        
+        self.eingebucht = True
+
+@dataclass(eq=False)
+class Semester:
+    """Ein Semester des Studienplans mit den Modulen, die darin vorgesehen sind"""
+    nummer: int
+    module: list[Modul] = field(default_factory=list)
+    
+@dataclass(eq=False)
+class Wahlpflichtgruppe:
+    """Eine Gruppe von Wahlpflichtmodulen mit einer Obergrenze an ECTS"""
+    name: str
+    maximaleEcts: int
+    module: list[Modul] = field(default_factory=list)
+
+REGELZEIT_IN_MONATEN = {
+    Studienart.VOLLZEIT: 36,
+    Studienart.TEILZEIT_1: 48, 
+    Studienart.TEILZEIT_2: 72,
+}
+
+@dataclass(eq=False)
+class Studiengang:
+    """Der Studiengang mit Startdatum, Studienart, Gesamt-ECTS und Notenzielen. Er enthält die Semester und Wahlpflichtgruppen"""
+    name: str
+    art: Studienart
+    startdatum: date
+    gesamtEcts: int
+    wunschwertNote: Decimal
+    grenzwertNote: Decimal
+    semester: list[Semester] = field(default_factory=list)
+    wahlpflichtgruppen: list[Wahlpflichtgruppe] = field(default_factory=list)
+    
+    @property
+    def regelzeitInMonaten(self) -> int:
+        """Regelstudienzeit in Monaten, abhängig von der Studienart."""
+        return REGELZEIT_IN_MONATEN[self.art]
+    
+    @property
+    def enddatum(self) -> date:
+        """Berechnetes Enddatum: Startdatum plus Regelzeit in Monaten"""
+        monate = self.startdatum.month -1 + self.regelzeitInMonaten
+        jahr = self.startdatum.year + monate // 12
+        monat = monate % 12 + 1
+        letzter_tag = calendar.monthrange(jahr, monat)[1]
+        return date(jahr, monat, min(self.startdatum.day, letzter_tag))
+        
+    def alleModule(self) -> list[Modul]:
+        """Gibt eine Liste mit den Modulen aller Semester zurück"""
+        module = []
+        for semester in self.semester:
+            module.extend(semester.module)
+        return module
+        
+    def fuegeModulHinzu(self, semesternummer: int, modul: Modul) -> None:
+        """Fügt ein Modul in ein Semester hinzu. Ein Modul gibt es nur einmal, sonst wird ein Fehler ausgegeben"""
+        for vorhanden in self.alleModule():
+            if vorhanden is modul or vorhanden.name == modul.name:
+                raise ValueError(f"Das Modul {modul.name} gibt es schon.")
+        
+        for semester in self.semester:
+            if semester.nummer == semesternummer:
+                semester.module.append(modul)
+                return
+        raise ValueError(f"Das Semester {semesternummer} gibt es nicht.")
+        
