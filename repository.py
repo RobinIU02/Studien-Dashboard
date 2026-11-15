@@ -1,4 +1,4 @@
-"""Persistentzschicht des Studien-Dashboards.
+"""Persistenzschicht des Studien-Dashboards.
 Die Datei enthält die abstrakte Schnittstelle StudiengangRepository und die JSON-Implementierung JsonStudiengangRepository."""
 
 from __future__ import annotations
@@ -19,39 +19,48 @@ from domain import (
     Wahlpflichtgruppe,
 )
 
-from domain import Studiengang
-
 
 class StudiengangRepository(ABC):
     """Schnittstelle für das Laden und Speichern eines Studiengangs.
     Die Klasse legt nur fest, welche Methoden ein Repository haben muss.
     Wie die Daten gespeichert werden, entscheiden die Unterklassen."""
+
     
     @abstractmethod
     def lade(self) -> Studiengang:
         """Lädt den Studiengang aus dem Speicher und gibt ihn zurück"""
-    
+ 
+ 
     @abstractmethod 
     def speichere(self, studiengang: Studiengang) -> None:
         """Schreibt den übergebenen Studiengang in den Speicher."""
+
 
 class JsonStudiengangRepository(StudiengangRepository):
     """Speichert und lädt den Studiengang aus einer JSON-Datei.
     
     Attribute: 
         dateipfad: Pfad der JSON-Datei, mit der gearbeitet wird."""
+
         
     def __init__(self, dateipfad: str) -> None:
         """Merkt sich den Pfad der JSON-Datei.
         Args:
-            dateipfad: Pfad zur Datei, zum Beospiel "daten/studiengang.json"."""
+            dateipfad: Pfad zur Datei, zum Beispiel "daten/studiengang.json"."""
         self.dateipfad = Path(dateipfad)
+
     
     def lade(self) -> Studiengang:
         """Lädt den Studiengang aus der JSON-Datei.
         Die Module werden einmal angelegt. Semester und Wahlpflichtgruppen verwenden danach dieselben Objekte.
         Returns:
-            Der fertig aufgebaute Studiengang."""
+            Der fertig aufgebaute Studiengang.
+        OSError:
+            Datei fehlt.
+        ValueError:
+            kaputte JSON oder unbekannte Module.
+        KeyError:
+            fehlender Eintrag."""
         with open(self.dateipfad, encoding="utf-8") as datei:
             daten = json.load(datei)
         
@@ -90,9 +99,11 @@ class JsonStudiengangRepository(StudiengangRepository):
     def speichere(self, studiengang: Studiengang) -> None:
         """Schreibt den Studiengang in die JSON-Datei
         Jedes Modul wird einmal in der Liste "module" gespeichert.
-        Semester und Wahlpflichtgruppn enthalten nur die Modulnamen.
+        Semester und Wahlpflichtgruppen enthalten nur die Modulnamen.
         Args:
-            studiengagn: Der Studiengang, der gespeichert wird."""
+            studiengang: Der Studiengang, der gespeichert wird.
+        Raises:
+            OSError: Wenn die Datei nicht geschrieben werden kann."""
         daten = {
             "studiengang": {
                 "name": studiengang.name,
@@ -124,7 +135,8 @@ class JsonStudiengangRepository(StudiengangRepository):
         }
         with open(self.dateipfad, "w", encoding="utf-8") as datei:
             json.dump(daten, datei, ensure_ascii=False, indent=2)
-        
+ 
+ 
     def _baueLeistung(self, daten:dict) -> Pruefungsleistung:
         """Baut aus einem JSON-Eintrag eine Prüfungsleistung.
         Args:
@@ -139,7 +151,8 @@ class JsonStudiengangRepository(StudiengangRepository):
             ergebnis=Ergebnis(daten["ergebnis"]),
             note=note,
         )
-        
+ 
+ 
     def _baueModule(self, modulDaten: list[dict]) -> dict[str, Modul]:
         """Legt alle Module an, zunächst ohne Voraussetzungen.
         Args:
@@ -149,7 +162,7 @@ class JsonStudiengangRepository(StudiengangRepository):
         module = {}
         for eintrag in modulDaten:
             leistungen = [
-            self._baueLeistung(leistung)
+                self._baueLeistung(leistung)
             for leistung in eintrag["pruefungsleistungen"]
             ]
             module[eintrag["name"]] = Modul(
@@ -159,7 +172,8 @@ class JsonStudiengangRepository(StudiengangRepository):
                 pruefungsleistungen=leistungen,
             )
         return module
-    
+ 
+ 
     def _verknuepfeVoraussetzungen(
         self, modulDaten: list[dict], module: dict[str, Modul]
     ) -> None:
@@ -177,8 +191,10 @@ class JsonStudiengangRepository(StudiengangRepository):
                     raise ValueError(
                         f"Unbekannte Voraussetzung '{name}' "
                         f"bei Modul '{modul.name}'."
-                    )
+                    ) 
                 modul.voraussetzung.append(module[name])
+               
+               
     def _holeModule(
         self, namen: list[str], module: dict[str, Modul]
     ) -> list[Modul]:
@@ -189,20 +205,21 @@ class JsonStudiengangRepository(StudiengangRepository):
         Returns:
             Liste der Modul-Objekte in der Reihenfolge der Namen.
         Raises:
-            ValueError: Wenn eine Name nicht in der Modulliste steht."""
+            ValueError: Wenn ein Name nicht in der Modulliste steht."""
         ergebnis = []
         for name in namen:
             if name not in module:
                 raise ValueError(f"Unbekanntes Modul '{name}' in der Datei.")
             ergebnis.append(module[name])
         return ergebnis
-        
-    def _leistungZuDaten(self, leistung: Pruefleistung) -> dict:
+     
+     
+    def _leistungZuDaten(self, leistung: Pruefungsleistung) -> dict:
         """Wandelt eine Prüfungsleistung in ein Wörterbuch für JSON um.
         Args:
             leistung: Die Prüfungsleistung, die gespeichert wird.
         Returns:
-            Wörterbuch mit versuchsnummer, ergebnis und note. Eine fehlende Note wird zu none und damit zu null in der Datei"""
+            Wörterbuch mit versuchsnummer, ergebnis und note. Eine fehlende Note wird zu None und damit zu null in der Datei"""
         note = None
         if leistung.note is not None:
             note = str(leistung.note)
@@ -211,6 +228,7 @@ class JsonStudiengangRepository(StudiengangRepository):
             "ergebnis": leistung.ergebnis.value,
             "note": note,
         }
+    
     
     def _modulZuDaten(self, modul: Modul) -> dict:
         """Wandelt ein Modul in ein Wörterbuch für JSON um.
