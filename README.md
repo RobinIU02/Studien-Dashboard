@@ -8,7 +8,7 @@ Konsolenanwendung, die den Studienfortschritt im Bachelorstudium Cyber Security 
 
 ## Voraussetzungen
 
-- Python 3.13 (entwickelt und getestet unter Windows mit Anaconda)
+- Python 3.13 oder neuer (entwickelt mit Python 3.13 unter Windows, zusätzlich getestet mit Python 3.14)
 - Keine zusätzlichen Bibliotheken, nur die Standardbibliothek
 
 ## Starten
