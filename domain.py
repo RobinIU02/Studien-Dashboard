@@ -1,4 +1,4 @@
-"""Fachklassen und Enumerationen des Studien-Dashboards"""
+"""Fachklassen und Enumerationen des Studien-Dashboards."""
 from __future__ import annotations
 
 from decimal import Decimal
@@ -41,11 +41,11 @@ class Pruefungsleistung:
     ergebnis: Ergebnis
     note: Decimal | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Prüft nach dem Anlegen, ob Versuchsnummer, Ergebnis und Note zusammenpassen.
         Raises:
             ValueError: Wenn die Versuchsnummer kleiner als 1 ist, eine Note fehlt oder nicht zum Ergebnis passt.
-        TypeErrpr: Wenn die Note kein Decimal ist."""
+            TypeError: Wenn die Note kein Decimal ist."""
         if self.versuchsnummer < 1:
             raise ValueError("Die Versuchsnummer muss mindestens 1 sein.")
         hat_note = self.ergebnis in (Ergebnis.BESTANDEN, Ergebnis.NICHT_BESTANDEN)
@@ -60,7 +60,7 @@ class Pruefungsleistung:
         
         if self.ergebnis == Ergebnis.BESTANDEN:
             if not Decimal("1.0") <=self.note <= Decimal("4.0"):
-                raise ValueError("Bestanden gilt nur für die Noten von 1,0 bis 4,0")
+                raise ValueError("Bestanden gilt nur für die Noten von 1,0 bis 4,0.")
         else:
             if not Decimal("4.1") <= self.note <= Decimal("5.0"):
                 raise ValueError("Nicht bestanden gilt nur für die Noten von 4,1 bis 5,0.")
@@ -76,7 +76,7 @@ class Modul:
     pruefungsleistungen: list[Pruefungsleistung] = field(default_factory=list)
     
     def __post_init__(self) -> None:
-        """Prüft, dass Name und ECTS des Moduls gültig ist.
+        """Prüft, dass Name und ECTS des Moduls gültig sind.
         Raises: 
             ValueError: Wenn der Name leer ist oder die ECTS nicht größer als 0 sind. """
         if not self.name.strip():
@@ -87,7 +87,7 @@ class Modul:
             
     @property        
     def status(self) -> Modulstatus:
-        """Berechneter Status des Moduls, abhängig von Prüfungsleistungen, Voraussetzungen und Buchung"""
+        """Berechneter Status des Moduls, abhängig von Prüfungsleistungen, Voraussetzungen und Buchung."""
         for leistung in self.pruefungsleistungen:
             if leistung.ergebnis in (Ergebnis.BESTANDEN, Ergebnis.ANERKANNT):
                 return Modulstatus.ABGESCHLOSSEN
@@ -101,9 +101,9 @@ class Modul:
  
  
     def buche(self) -> None:
-        """Bucht das Modul ein. Fehlt eine Voraussetzung, wird ein Fehler ausgelöst""" 
+        """Bucht das Modul ein. Fehlt eine Voraussetzung, wird ein Fehler ausgelöst.""" 
         if self.status == Modulstatus.ABGESCHLOSSEN:
-            raise ValueError(f"Das Modul {self.name} ist bereits abgeschlossen")
+            raise ValueError(f"Das Modul {self.name} ist bereits abgeschlossen.")
             
         fehlende = []
         for voraussetzung in self.voraussetzung:
@@ -117,21 +117,26 @@ class Modul:
 
         
     def fuegePruefungsleistungHinzu(self, leistung: Pruefungsleistung) -> None:
-        """Trägt eine Prüfungsleistung ein und bicht das Modul dabei nötigenfalls ein.
-        Die Versuchsnummer muss die nächte in der Reihenfolge sein.
+        """Trägt eine Prüfungsleistung ein und bucht das Modul dabei nötigenfalls ein.
+        Die Versuchsnummer muss die nächste in der Reihenfolge sein.
         Raises:
-            ValueError: Wenn das Mdul schon abgeschlossen ist, die Versuchsnummer nicht passt oder eine Vorraussetzung fehlt."""
+            ValueError: Wenn das Modul schon abgeschlossen ist, die Versuchsnummer nicht passt oder eine Vorraussetzung fehlt."""
         if self.status == Modulstatus.ABGESCHLOSSEN:
             raise ValueError(f"Das Modul {self.name} ist bereits abgeschlossen.")
-        erwartet = len(self.pruefungsleistungen) + 1
+        erwartet = self.naechsteVersuchsnummer
         if leistung.versuchsnummer != erwartet:
             raise ValueError(
-                f"Bei {self.name} ist Versuch {erwartet} an der Reihe ,"
+                f"Bei {self.name} ist Versuch {erwartet} an der Reihe, "
                 f"nicht Versuch {leistung.versuchsnummer}."
             )
         if not self.eingebucht:
             self.buche()
         self.pruefungsleistungen.append(leistung)
+    
+    @property
+    def naechsteVersuchsnummer(self) -> int:
+        """Nummer des nächsten Versuchs: Anzahl der bisherigen Leistungen plus 1."""
+        return len(self.pruefungsleistungen) + 1
 
 
 @dataclass(eq=False)
@@ -184,7 +189,7 @@ class Studiengang:
             
     @property
     def enddatum(self) -> date:
-        """Berechnetes Enddatum: Startdatum plus Regelzeit in Monaten"""
+        """Berechnetes Enddatum: Startdatum plus Regelzeit in Monaten."""
         return addiereMonate(self.startdatum, self.regelzeitInMonaten)
  
  
